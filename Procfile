@@ -1,1 +1,1 @@
-web: gunicorn m365-single:app
+web: python m365-single.py
